@@ -2,7 +2,6 @@ import "dotenv/config";
 
 import fastifyCors from "@fastify/cors";
 import fastifySwagger from "@fastify/swagger";
-import fastifySwaggerUI from "@fastify/swagger-ui";
 import fastifyApiReference from "@scalar/fastify-api-reference";
 import Fastify from "fastify";
 import {
@@ -13,7 +12,9 @@ import {
 } from "fastify-type-provider-zod";
 import z from "zod";
 
-import auth from "./lib/auth.js";
+import { auth } from "./lib/auth.js";
+import { leadsRoutes } from "./routes/leads.js";
+import { propertiesRoutes } from "./routes/properties.js";
 
 const app = Fastify({
   logger: true,
@@ -25,8 +26,8 @@ app.setSerializerCompiler(serializerCompiler);
 await app.register(fastifySwagger, {
   openapi: {
     info: {
-      title: "Imóveis IA API",
-      description: "API para o sistema de busca de imóveis IA",
+      title: "API Catálogo de Imóveis e Repúblicas",
+      description: "API do agregador inteligente com IA",
       version: "1.0.0",
     },
     servers: [
@@ -49,8 +50,8 @@ await app.register(fastifyApiReference, {
   configuration: {
     sources: [
       {
-        title: "Imoveis IA API",
-        slug: "imoveis-ia-api",
+        title: "Imóveis API",
+        slug: "imoveis-api",
         url: "/swagger.json",
       },
       {
@@ -61,6 +62,10 @@ await app.register(fastifyApiReference, {
     ],
   },
 });
+
+// Registrar rotas de negócio
+await app.register(propertiesRoutes, { prefix: "/properties" });
+await app.register(leadsRoutes, { prefix: "/leads" });
 
 app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
@@ -77,16 +82,18 @@ app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
   url: "/",
   schema: {
-    description: "Hello World",
-    tags: ["test"],
+    description: "Status do Servidor",
+    tags: ["Health Check"],
     response: {
       200: z.object({
         message: z.string(),
       }),
     },
   },
-  handler: (req, res) => {
-    res.send({ message: "Hello World" });
+  handler: () => {
+    return {
+      message: "API Imobiliária funcionando! Acesse /docs para ver o Swagger.",
+    };
   },
 });
 
@@ -96,27 +103,23 @@ app.route({
   async handler(request, reply) {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
-
       const headers = new Headers();
       Object.entries(request.headers).forEach(([key, value]) => {
         if (value) headers.append(key, value.toString());
       });
-
       const req = new Request(url.toString(), {
         method: request.method,
         headers,
         ...(request.body ? { body: JSON.stringify(request.body) } : {}),
       });
-
       const response = await auth.handler(req);
-
       reply.status(response.status);
       response.headers.forEach((value, key) => reply.header(key, value));
       reply.send(response.body ? await response.text() : null);
     } catch (error) {
       app.log.error(error);
       reply.status(500).send({
-        error: "Internal authentication error",
+        error: "Erro interno de autenticação",
         code: "AUTH_FAILURE",
       });
     }
@@ -124,7 +127,7 @@ app.route({
 });
 
 try {
-  await app.listen({ port: Number(process.env.PORT) || 3000 });
+  await app.listen({ port: Number(process.env.PORT) || 300 });
 } catch (err) {
   app.log.error(err);
   process.exit(1);
