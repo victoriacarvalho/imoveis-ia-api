@@ -1,0 +1,159 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Mude para "mysql" ou "sqlite" se não for usar PostgreSQL
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS (Listas de opções fixas para padronizar o banco)
+// -----------------------------------------------------------------------------
+
+enum TransactionType {
+  VENDA
+  ALUGUEL
+}
+
+enum PropertyType {
+  APARTAMENTO
+  CASA
+  COMERCIAL
+  LOTE
+  REPUBLICA 
+  QUARTO   
+}
+
+enum PropertyStatus {
+  DISPONIVEL
+  ALUGADO
+  VENDIDO
+  INATIVO
+}
+
+enum LeadOrigin {
+  BOTAO_AGENDAR
+  CHAT_IA
+}
+
+enum LeadStatus {
+  NOVO
+  ENVIADO_IMOBILIARIA
+  VISITA_FEITA
+}
+
+// -----------------------------------------------------------------------------
+// MODELS (Tabelas do Banco de Dados)
+// -----------------------------------------------------------------------------
+
+// Tabela de Usuários baseada exatamente na sua imagem
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String     @unique
+  emailVerified Boolean    @default(false)
+  image         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relações
+  favorites     Favorite[] // Um usuário pode ter vários imóveis favoritos
+
+  @@map("user") // Mantém o nome da tabela em minúsculo, igual à sua imagem
+}
+
+// Tabela das Imobiliárias (Ou sites fontes do Scraping)
+model Agency {
+  id           String     @id @default(cuid())
+  name         String
+  websiteUrl   String?
+  logoUrl      String?
+  primaryColor String?    @default("#10B981") // Cor padrão caso seja White-Label
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relações
+  properties   Property[]
+  leads        Lead[]
+
+  @@map("agencies")
+}
+
+// Tabela Principal: Imóveis
+model Property {
+  id              String          @id @default(cuid())
+  externalId      String?         // ID do imóvel no site original (Evita duplicar no Scraping)
+  title           String
+  description     String?         @db.Text
+  transactionType TransactionType
+  propertyType    PropertyType
+  price           Decimal         @db.Decimal(10, 2)
+  city            String
+  state           String
+  neighborhood    String?
+  isFurnished Boolean @default(false)
+  billsIncluded Boolean @default(false)
+  roomType String?
+  genderRules String?
+  bedrooms        Int             @default(0)
+  bathrooms       Int             @default(0)
+  parkingSpots    Int             @default(0)
+  area            Decimal?        @db.Decimal(10, 2)
+  mainImage       String
+  gallery         String[]        // Array nativo do PostgreSQL para as outras fotos
+  status          PropertyStatus  @default(DISPONIVEL)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Chaves Estrangeiras (Relações)
+  agencyId        String
+  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  favorites       Favorite[]
+  leads           Lead[]
+
+  // Garante que o robô não cadastre o mesmo imóvel da mesma imobiliária 2 vezes
+  @@unique([agencyId, externalId])
+  @@map("properties")
+}
+
+// Tabela de "Lista de Desejos" (Ligação N:N entre User e Property)
+model Favorite {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Garante que o usuário não favorite o mesmo imóvel 2 vezes
+  @@unique([userId, propertyId])
+  @@map("favorites")
+}
+
+// Tabela de Contatos/Agendamentos (Onde o dinheiro acontece)
+model Lead {
+  id          String      @id @default(cuid())
+  clientName  String
+  clientPhone String
+  origin      LeadOrigin
+  aiSummary   String?     @db.Text
+  status      LeadStatus  @default(NOVO)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relações
+  propertyId  String
+  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  agencyId    String
+  agency      Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("leads")
+}
