@@ -1,10 +1,12 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql" // Mude para "mysql" ou "sqlite" se não for usar PostgreSQL
+  provider = "postgresql"
+  // Mude para "mysql" ou "sqlite" se não for usar PostgreSQL
 }
 
 // -----------------------------------------------------------------------------
@@ -21,8 +23,8 @@ enum PropertyType {
   CASA
   COMERCIAL
   LOTE
-  REPUBLICA 
-  QUARTO   
+  REPUBLICA
+  QUARTO
 }
 
 enum PropertyStatus {
@@ -48,43 +50,45 @@ enum LeadStatus {
 // -----------------------------------------------------------------------------
 
 // Tabela de Usuários baseada exatamente na sua imagem
+
 model User {
-  id            String     @id @default(cuid())
+  id            String   @id 
   name          String?
-  email         String     @unique
-  emailVerified Boolean    @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  favorites Favorite[] // Um usuário pode ter vários imóveis favoritos
+  sessions Session[]
+  accounts Account[]
 
-  // Relações
-  favorites     Favorite[] // Um usuário pode ter vários imóveis favoritos
-
-  @@map("user") // Mantém o nome da tabela em minúsculo, igual à sua imagem
+  @@map("user")
 }
 
 // Tabela das Imobiliárias (Ou sites fontes do Scraping)
+
 model Agency {
-  id           String     @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
   websiteUrl   String?
   logoUrl      String?
-  primaryColor String?    @default("#10B981") // Cor padrão caso seja White-Label
+  primaryColor String? @default("#10B981") // Cor padrão caso seja White-Label
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relações
-  properties   Property[]
-  leads        Lead[]
+  properties Property[]
+  leads      Lead[]
 
   @@map("agencies")
 }
 
 // Tabela Principal: Imóveis
+
 model Property {
   id              String          @id @default(cuid())
-  externalId      String?         // ID do imóvel no site original (Evita duplicar no Scraping)
+  externalId      String? // ID do imóvel no site original (Evita duplicar no Scraping)
   title           String
   description     String?         @db.Text
   transactionType TransactionType
@@ -93,27 +97,27 @@ model Property {
   city            String
   state           String
   neighborhood    String?
-  isFurnished Boolean @default(false)
-  billsIncluded Boolean @default(false)
-  roomType String?
-  genderRules String?
+  isFurnished     Boolean         @default(false)
+  billsIncluded   Boolean         @default(false)
+  roomType        String?
+  genderRules     String?
   bedrooms        Int             @default(0)
   bathrooms       Int             @default(0)
   parkingSpots    Int             @default(0)
   area            Decimal?        @db.Decimal(10, 2)
   mainImage       String
-  gallery         String[]        // Array nativo do PostgreSQL para as outras fotos
+  gallery         String[] // Array nativo do PostgreSQL para as outras fotos
   status          PropertyStatus  @default(DISPONIVEL)
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Chaves Estrangeiras (Relações)
-  agencyId        String
-  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
-  favorites       Favorite[]
-  leads           Lead[]
+  favorites Favorite[]
+  leads     Lead[]
 
   // Garante que o robô não cadastre o mesmo imóvel da mesma imobiliária 2 vezes
   @@unique([agencyId, externalId])
@@ -121,13 +125,14 @@ model Property {
 }
 
 // Tabela de "Lista de Desejos" (Ligação N:N entre User e Property)
-model Favorite {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
 
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+model Favorite {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -137,23 +142,71 @@ model Favorite {
 }
 
 // Tabela de Contatos/Agendamentos (Onde o dinheiro acontece)
+
 model Lead {
-  id          String      @id @default(cuid())
+  id          String     @id @default(cuid())
   clientName  String
   clientPhone String
   origin      LeadOrigin
-  aiSummary   String?     @db.Text
-  status      LeadStatus  @default(NOVO)
+  aiSummary   String?    @db.Text
+  status      LeadStatus @default(NOVO)
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relações
-  propertyId  String
-  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  
-  agencyId    String
-  agency      Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   @@map("leads")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }
