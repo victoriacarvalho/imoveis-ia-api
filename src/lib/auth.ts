@@ -6,7 +6,7 @@ import { openAPI } from "better-auth/plugins";
 import { PrismaClient } from "../generated/prisma/client.js";
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ conectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
 export const auth = betterAuth({
@@ -17,6 +17,14 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  user: {
+    additionalFields: {
+      isAdmin: {
+        type: "boolean",
+        defaultValue: false,
+      },
+    },
+  },
   plugins: [openAPI({})],
 });
 
