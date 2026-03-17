@@ -3,7 +3,6 @@ import "dotenv/config";
 import fastifyCors from "@fastify/cors";
 import fastifySwagger from "@fastify/swagger";
 import fastifyApiReference from "@scalar/fastify-api-reference";
-import { fromNodeHeaders } from "better-auth/node";
 import Fastify from "fastify";
 import {
   jsonSchemaTransform,
@@ -14,9 +13,9 @@ import {
 import z from "zod";
 
 import { auth } from "./lib/auth.js";
-import { prisma } from "./lib/db.js";
-import { CreateProperty } from "./usecases/create-properties.js";
-
+import { aiRoutes } from "./routes/ai.js";
+import { imoveisRoutes } from "./routes/imoveis.js";
+import { leadsRoutes } from "./routes/leads.js";
 const app = Fastify({
   logger: true,
 });
@@ -64,148 +63,10 @@ await app.register(fastifyApiReference, {
   },
 });
 
-//cliente ver as propriedades
-app.withTypeProvider<ZodTypeProvider>().route({
-  method: "GET",
-  url: "/imoveis",
-  schema: {
-    tags: ["Imóveis"],
-    description: "Lista o catálogo de imóveis resumido para exibição nos cards",
-    response: {
-      201: z.object({
-        imoveis: z.array(
-          z.object({
-            id: z.string(),
-            title: z.string(),
-            propertyType: z.string(),
-            neighborhood: z.string().nullable(),
-            price: z.number(),
-          }),
-        ),
-      }),
-      400: z.object({
-        error: z.string(),
-        code: z.string(),
-      }),
-    },
-  },
-  handler: async (request, reply) => {
-    const propriedades = await prisma.property.findMany({
-      where: {
-        status: "DISPONIVEL",
-      },
-      select: {
-        id: true,
-        title: true,
-        propertyType: true,
-        neighborhood: true,
-        price: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    const imoveisFormatados = propriedades.map((imovel) => ({
-      id: imovel.id,
-      title: imovel.title,
-      propertyType: imovel.propertyType,
-      neighborhood: imovel.neighborhood,
-      price: Number(imovel.price),
-    }));
-
-    return reply.send({ imoveis: imoveisFormatados });
-  },
-});
-
-//adm criar novos anuncios
-app.withTypeProvider<ZodTypeProvider>().route({
-  method: "POST",
-  url: "/imoveis",
-  schema: {
-    operationId: "createProperty",
-    tags: ["Imóveis"],
-    summary: "Cadastra um novo imóvel (Apenas Administradores)",
-    body: z.object({
-      title: z.string().trim().min(1, "O título é obrigatório"),
-      description: z.string().optional(),
-      transactionType: z.enum(["VENDA", "ALUGUEL"]),
-      propertyType: z.enum([
-        "APARTAMENTO",
-        "CASA",
-        "COMERCIAL",
-        "LOTE",
-        "REPUBLICA",
-        "QUARTO",
-      ]),
-      price: z.number().positive("O preço deve ser maior que zero"),
-      city: z.string().trim().min(1, "A cidade é obrigatória"),
-      state: z.string().length(2, "Use a sigla do estado (Ex: MG)"),
-      neighborhood: z.string().optional(),
-      bedrooms: z.number().int().nonnegative().default(0),
-      bathrooms: z.number().int().nonnegative().default(0),
-      mainImage: z.string().url("A imagem principal deve ser um link válido"),
-      agencyId: z.string(),
-    }),
-    response: {
-      201: z.object({
-        id: z.string(),
-        title: z.string(),
-        message: z.string().optional(),
-      }),
-      401: z.object({
-        error: z.string(),
-        code: z.string(),
-      }),
-      403: z.object({
-        error: z.string(),
-        code: z.string(),
-      }),
-      500: z.object({
-        error: z.string(),
-        code: z.string(),
-      }),
-    },
-  },
-  handler: async (request, reply) => {
-    try {
-      const session = await auth.api.getSession({
-        headers: fromNodeHeaders(request.headers),
-      });
-
-      if (!session) {
-        return reply.status(401).send({
-          error: "Não autorizado. Faça login para continuar.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      if (!session.user.isAdmin) {
-        return reply.status(403).send({
-          error:
-            "Acesso negado. Apenas administradores podem cadastrar imóveis.",
-          code: "FORBIDDEN",
-        });
-      }
-
-      const createProperty = new CreateProperty();
-      const result = await createProperty.execute(request.body);
-
-      return reply.status(201).send({
-        id: result.id,
-        title: result.title,
-        message: "Imóvel cadastrado com sucesso!",
-      });
-    } catch (error) {
-      app.log.error(error);
-
-      return reply.status(500).send({
-        error: "Erro interno no servidor ao tentar criar o imóvel.",
-        code: "INTERNAL_SERVER_ERROR",
-      });
-    }
-  },
-});
+//Rotas
+await app.register(imoveisRoutes, { prefix: "/imoveis" });
+await app.register(aiRoutes);
+await app.register(leadsRoutes, { prefix: "/leads" });
 
 app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
