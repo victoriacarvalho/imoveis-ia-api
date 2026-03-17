@@ -12,7 +12,6 @@ export class UnauthorizedError extends Error {
   }
 }
 
-// Erro específico para quando alguém tentar agendar visita num imóvel que já foi alugado/vendido
 export class PropertyNotAvailableError extends Error {
   constructor(message: string) {
     super(message);
