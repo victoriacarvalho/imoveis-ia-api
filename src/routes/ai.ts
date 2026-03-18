@@ -22,33 +22,37 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const modelMessages = await convertToModelMessages(messages);
 
+      function normalizarCidadeFixa() {
+        return "João Monlevade";
+      }
+
       const result = streamText({
         model: groq("openai/gpt-oss-120b"),
         maxSteps: 5,
         system: `
-Você é a assistente da imobiliária Casa São José.
+          Você é a assistente da imobiliária Casa São José.
 
-Sua função é buscar imóveis com base exatamente no que o usuário pedir.
+          Sua função é buscar imóveis com base exatamente no que o usuário pedir.
+          Ao usar a ferramenta buscarImoveis, use somente estes campos:
+          - tipo_transacao: "ALUGUEL" ou "VENDA"
+          - tipoImovel: ex. "apartamento", "casa", "lote"
+          - bairro
+          - localizacao
+          - precoMaximo
+          - termoBusca
 
-Ao usar a ferramenta buscarImoveis, use somente estes campos:
-- tipo_transacao: "ALUGUEL" ou "VENDA"
-- tipoImovel: ex. "apartamento", "casa", "lote"
-- bairro
-- cidade
-- localizacao
-- precoMaximo
-- termoBusca
-
-Regras:
-1. "alugar", "locação", "aluguel" => tipo_transacao = "ALUGUEL"
-2. "comprar", "venda" => tipo_transacao = "VENDA"
-3. bairro deve ir em "bairro"
-4. cidade deve ir em "cidade"
-5. preço máximo deve ir em "precoMaximo"
-6. tipo de imóvel deve ir em "tipoImovel"
-7. Não invente campos fora dessa lista.
-8. Se não encontrar resultados, diga que não encontrou imóveis com esses filtros.
-`,
+          Regras:
+          1. "alugar", "locação", "aluguel" => tipo_transacao = "ALUGUEL"
+          2. "comprar", "venda" => tipo_transacao = "VENDA"
+          3. Termos como Loanda, Cruzeiro Celeste, Carneirinhos, Rosário etc. devem ser tratados como bairro
+          4. A cidade deve ser sempre João Monlevade
+          5. Nunca inferir outra cidade
+          6. "JM", "jm", "Monlevade", "monlevade", "joao monlevade", "joão monlevade" se referem à cidade fixa e não devem virar filtro de outra cidade
+          7. preço máximo deve ir em "precoMaximo"
+          8. tipo de imóvel deve ir em "tipoImovel"
+          9. Não invente campos fora dessa lista
+          10. Se não encontrar resultados, diga que não encontrou imóveis com esses filtros
+          `,
         messages: modelMessages,
         tools: {
           buscarImoveis: tool({
@@ -58,7 +62,6 @@ Regras:
               termoBusca: z.string().optional(),
               tipoImovel: z.string().optional(),
               bairro: z.string().optional(),
-              cidade: z.string().optional(),
               localizacao: z.string().optional(),
               precoMaximo: z.coerce.number().optional(),
               tipo_transacao: z.enum(["VENDA", "ALUGUEL"]).optional(),
@@ -70,9 +73,9 @@ Regras:
                 ""
               ).trim();
               const bairroFiltro = args.bairro?.trim();
-              const cidadeFiltro = args.cidade?.trim();
               const localFiltro = args.localizacao?.trim();
               const valorFiltro = args.precoMaximo;
+              const cidadeFixa = normalizarCidadeFixa();
 
               let transacaoFiltro: TransactionType | undefined;
 
@@ -84,6 +87,10 @@ Regras:
 
               const where: any = {
                 status: "DISPONIVEL",
+                city: {
+                  equals: cidadeFixa,
+                  mode: "insensitive",
+                },
               };
 
               if (transacaoFiltro) {
@@ -102,30 +109,11 @@ Regras:
                   contains: bairroFiltro,
                   mode: "insensitive",
                 };
-              }
-
-              if (cidadeFiltro) {
-                where.city = {
-                  contains: cidadeFiltro,
+              } else if (localFiltro) {
+                where.neighborhood = {
+                  contains: localFiltro,
                   mode: "insensitive",
                 };
-              }
-
-              if (!bairroFiltro && !cidadeFiltro && localFiltro) {
-                where.OR = [
-                  {
-                    city: {
-                      contains: localFiltro,
-                      mode: "insensitive",
-                    },
-                  },
-                  {
-                    neighborhood: {
-                      contains: localFiltro,
-                      mode: "insensitive",
-                    },
-                  },
-                ];
               }
 
               if (buscaTexto) {

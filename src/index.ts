@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import fastifyCors from "@fastify/cors";
+import cors from "@fastify/cors";
 import fastifySwagger from "@fastify/swagger";
 import fastifyApiReference from "@scalar/fastify-api-reference";
 import Fastify from "fastify";
@@ -41,8 +42,17 @@ await app.register(fastifySwagger, {
 });
 
 await app.register(fastifyCors, {
-  origin: ["http://localhost:3000"],
+  origin: true,
   credentials: true,
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "User-Agent",
+    "x-vercel-ai-data-stream",
+    "x-vercel-ai-request-id",
+  ],
+  exposedHeaders: ["x-vercel-ai-data-stream"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 });
 
 await app.register(fastifyApiReference, {
@@ -127,8 +137,12 @@ app.route({
   },
 });
 
+const PORT = Number(process.env.PORT) || 8081;
+
 try {
-  await app.listen({ port: Number(process.env.PORT) || 300 });
+  // Usar host '0.0.0.0' ajuda a evitar problemas de conexão no Windows
+  await app.listen({ port: PORT, host: "0.0.0.0" });
+  console.log(`Server ready at http://localhost:${PORT}`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

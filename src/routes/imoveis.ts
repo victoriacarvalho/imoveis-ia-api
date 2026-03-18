@@ -16,15 +16,14 @@ import { CreateProperty } from "../usecases/create-properties.js";
 import { GetProperty } from "../usecases/get-imoveis.js";
 
 export const imoveisRoutes = async (app: FastifyInstance) => {
-  // 1. Cliente ver detalhes de UMA propriedade
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "GET",
-    url: "/:id", // ✅ Se houver prefixo no index.ts. Se não houver, mantenha "/imoveis/:id"
+    url: "/:id",
     schema: {
       tags: ["Imóveis"],
       summary: "Busca os detalhes completos de um imóvel",
       params: z.object({
-        id: z.string(), // ✅ Removemos o .cuid() para permitir o externalId
+        id: z.string(),
       }),
       response: {
         200: z.any(),
@@ -34,7 +33,6 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
     handler: async (request, reply) => {
       try {
         const getProperty = new GetProperty();
-        // O seu useCase (GetProperty) precisa estar preparado para buscar por externalId também!
         const property = await getProperty.execute({ id: request.params.id });
 
         return reply.send(property);
@@ -49,21 +47,31 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
     },
   });
 
-  // 2. ROTA RECONSTRUÍDA: Cliente ver TODAS as propriedades
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "GET",
     url: "/",
     schema: {
       tags: ["Imóveis"],
       summary: "Lista todos os imóveis cadastrados",
+      querystring: z.object({
+        propertyType: z.string().optional(),
+        transactionType: z.string().optional(),
+        take: z.string().optional(),
+      }),
       response: {
-        200: z.any(), // Depois você pode tipar isso melhor com Zod
+        200: z.any(),
       },
     },
     handler: async (request, reply) => {
-      // ⚠️ ATENÇÃO: Você precisa buscar as 'propriedades' no banco de dados aqui.
-      // Exemplo usando Prisma diretamente (ou você pode criar um UseCase de Listagem):
-      const propriedades = await prisma.property.findMany();
+      const { propertyType, transactionType, take } = request.query as any;
+
+      const propriedades = await prisma.property.findMany({
+        where: {
+          ...(propertyType ? { propertyType: propertyType } : {}),
+          ...(transactionType ? { transactionType: transactionType } : {}),
+        },
+        take: take ? parseInt(take) : undefined,
+      });
 
       const imoveisFormatados = propriedades.map((imovel: any) => ({
         id: imovel.id,
@@ -74,13 +82,13 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
         bedrooms: imovel.bedrooms,
         bathrooms: imovel.bathrooms,
         mainImage: imovel.mainImage,
+        description: imovel.description,
       }));
 
       return reply.status(200).send({ imoveis: imoveisFormatados });
     },
   });
 
-  // 3. Admin criar novos anúncios
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
@@ -139,7 +147,4 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
       }
     },
   });
-
-  // ⚠️ NOTA: Removi a duplicata final do "GET /imoveis/:id" que estava sobrando no seu código original,
-  // pois a primeira rota do arquivo já faz exatamente a mesma coisa.
 };

@@ -6,9 +6,8 @@ import { prisma } from "../lib/db.js";
 
 async function runScraper() {
   const AGENCY_ID = "125";
-  console.log("🤖 Iniciando Scraper Sniper (Versão 3.0)...");
+  console.log(" Iniciando Scraper Sniper (Versão 3.1 - Imagens Shadowbox)...");
 
-  // Garante que a imobiliária existe no banco
   await prisma.agency.upsert({
     where: { id: AGENCY_ID },
     update: {},
@@ -29,14 +28,13 @@ async function runScraper() {
   const page = await browser.newPage();
 
   try {
-    const TOTAL_PAGINAS = 6;
+    const TOTAL_PAGINAS = 21;
     const todosOsLinks: string[] = [];
 
     console.log(`🔎 Varrendo as ${TOTAL_PAGINAS} páginas do catálogo...`);
 
-    // 1. Coleta de Links
     for (let paginaAtual = 1; paginaAtual <= TOTAL_PAGINAS; paginaAtual++) {
-      const urlPagina = `https://imobiliariasaojose.com.br/imoveis.php?filtro=aluguel&Pag=${paginaAtual}`;
+      const urlPagina = `https://imobiliariasaojose.com.br/imoveis.php?filtro=venda&Pag=${paginaAtual}`;
       await page.goto(urlPagina, { waitUntil: "networkidle2" });
 
       const linksDaPagina = await page.$$eval("a", (elements) =>
@@ -49,10 +47,9 @@ async function runScraper() {
 
     const linksUnicos = [...new Set(todosOsLinks)];
     console.log(
-      `\n✅ ${linksUnicos.length} imóveis únicos encontrados. Extraindo dados perfeitos...\n`,
+      `\n✅ ${linksUnicos.length} imóveis encontrados. Extraindo dados...\n`,
     );
 
-    // 2. Extração de Detalhes Linha a Linha (À Prova de Falhas)
     for (const link of linksUnicos) {
       const pageDetalhe = await browser.newPage();
 
@@ -60,14 +57,11 @@ async function runScraper() {
         await pageDetalhe.goto(link, { waitUntil: "networkidle2" });
 
         const dadosRaw = await pageDetalhe.evaluate(() => {
-          // Pega APENAS o texto visível e quebra linha por linha
           const linhas = document.body.innerText
             .split("\n")
             .map((l) => l.trim())
             .filter((l) => l.length > 0);
 
-          // 🎯 Busca a linha Exata do endereço
-          // Ex: "Serra - Avenida São Bernardino - 763 - Ap 302 - João Monlevade"
           const addressLine =
             linhas.find(
               (line) =>
@@ -78,14 +72,12 @@ async function runScraper() {
                 !line.toUpperCase().includes("VENDA"),
             ) || "";
 
-          // Busca as outras linhas chave
           const externalIdLine =
             linhas.find((line) => line.toUpperCase().includes("COD:")) || "";
           const priceLine =
             linhas.find((line) => line.includes("R$") && line.includes(",")) ||
             "0";
 
-          // O Título costuma ser a linha imediatamente abaixo do COD: ALUG...
           const idxCod = linhas.findIndex((line) =>
             line.toUpperCase().includes("COD:"),
           );
@@ -93,7 +85,15 @@ async function runScraper() {
           if (idxCod >= 0 && linhas.length > idxCod + 1)
             title = linhas[idxCod + 1];
 
-          // Características (Lendo a grade visual)
+          const linksFotos = Array.from(
+            document.querySelectorAll('a[rel*="shadowbox"], a[rel*="galeria"]'),
+          )
+            .map((a) => (a as HTMLAnchorElement).href)
+            .filter(
+              (href) =>
+                href && (href.includes(".jpg") || href.includes(".png")),
+            );
+
           const caracteristicas: any = { quartos: 0, suites: 0, vagas: 0 };
           const boxes = document.querySelectorAll(
             'div[style*="border: 1px solid #ccc"]',
@@ -117,43 +117,29 @@ async function runScraper() {
             addressLine,
             priceText: priceLine,
             caracteristicas,
-            galeria: Array.from(
-              document.querySelectorAll(
-                '.galeria img, a[rel*="shadowbox"] img',
-              ),
-            ).map((img) => (img as HTMLImageElement).src),
+            galeria: [...new Set(linksFotos)],
           };
         });
 
-        // --- TRATAMENTO NODE.JS ---
-
-        // 🏡 Limpeza do Bairro Perfeita
         let bairro = "João Monlevade";
         if (dadosRaw.addressLine) {
           const partes = dadosRaw.addressLine.split("-");
-          // Remove abreviações como "B. Serra" ou "Bairro Serra" -> vira "Serra"
           const possivelBairro = partes[0]
             .trim()
             .replace(/^B\.\s*|^Bairro\s*/i, "");
-
-          // Segurança final para garantir que não pegou lixo
           if (!possivelBairro.includes("R$") && possivelBairro.length < 40) {
             bairro = possivelBairro;
           }
         }
 
-        // 💰 Conversão de Preço Exata
         const matchPreco = dadosRaw.priceText.match(/R\$\s*([\d.,]+)/);
         let precoFinal = 1000;
         if (matchPreco) {
           precoFinal = Number(
             matchPreco[1].replace(/\./g, "").replace(",", "."),
           );
-        } else {
-          precoFinal = Number(dadosRaw.priceText.replace(/\D/g, "")) / 100;
         }
 
-        // Identificação do Tipo
         let propertyType = "CASA";
         const titleUpper = dadosRaw.title.toUpperCase();
         if (titleUpper.includes("APARTAMENTO") || titleUpper.includes("APT"))
@@ -167,7 +153,6 @@ async function runScraper() {
           propertyType = "COMERCIAL";
         else if (titleUpper.includes("REPUBLICA")) propertyType = "REPUBLICA";
 
-        // --- SALVA NO BANCO ---
         if (dadosRaw.externalId) {
           await prisma.property.upsert({
             where: {
@@ -190,7 +175,7 @@ async function runScraper() {
               agencyId: AGENCY_ID,
               externalId: dadosRaw.externalId,
               title: dadosRaw.title,
-              transactionType: "ALUGUEL",
+              transactionType: "VENDA",
               propertyType: propertyType as any,
               price: precoFinal,
               city: "João Monlevade",
@@ -204,18 +189,18 @@ async function runScraper() {
             },
           });
           console.log(
-            `✅ ${dadosRaw.externalId} | Bairro: ${bairro} | R$ ${precoFinal}`,
+            `✅ ${dadosRaw.externalId} | Bairro: ${bairro} | Fotos: ${dadosRaw.galeria.length}`,
           );
         }
       } catch (err: any) {
-        console.error(`❌ Erro no imóvel ${link}:`, err.message);
+        console.error(`❌ Erro no ID ${link}:`, err.message);
       } finally {
         await pageDetalhe.close();
       }
     }
   } finally {
     await browser.close();
-    console.log("🏁 Catálogo importado com sucesso e limpo!");
+    console.log("🏁 Catálogo importado com sucesso!");
   }
 }
 
