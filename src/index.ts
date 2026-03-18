@@ -14,6 +14,7 @@ import z from "zod";
 
 import { auth } from "./lib/auth.js";
 import { aiRoutes } from "./routes/ai.js";
+import { favoriteRoutes } from "./routes/favorites.js";
 import { imoveisRoutes } from "./routes/imoveis.js";
 import { leadsRoutes } from "./routes/leads.js";
 import { profileRoutes } from "./routes/profile.js";
@@ -79,6 +80,7 @@ await app.register(imoveisRoutes, { prefix: "/imoveis" });
 await app.register(aiRoutes);
 await app.register(leadsRoutes, { prefix: "/leads" });
 await app.register(profileRoutes);
+await app.register(favoriteRoutes);
 
 app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
@@ -108,6 +110,11 @@ app.withTypeProvider<ZodTypeProvider>().route({
       message: "API Imobiliária funcionando! Acesse /docs para ver o Swagger.",
     };
   },
+});
+
+app.listen({
+  port: 8081,
+  host: "0.0.0.0", // OBRIGATÓRIO para Docker
 });
 
 app.route({
@@ -142,7 +149,6 @@ app.route({
 const PORT = Number(process.env.PORT) || 8081;
 
 try {
-  // Usar host '0.0.0.0' ajuda a evitar problemas de conexão no Windows
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`Server ready at http://localhost:${PORT}`);
 } catch (err) {
