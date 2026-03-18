@@ -16,59 +16,71 @@ import { CreateProperty } from "../usecases/create-properties.js";
 import { GetProperty } from "../usecases/get-imoveis.js";
 
 export const imoveisRoutes = async (app: FastifyInstance) => {
-  //cliente ver as propriedades
+  // 1. Cliente ver detalhes de UMA propriedade
+  app.withTypeProvider<ZodTypeProvider>().route({
+    method: "GET",
+    url: "/:id", // ✅ Se houver prefixo no index.ts. Se não houver, mantenha "/imoveis/:id"
+    schema: {
+      tags: ["Imóveis"],
+      summary: "Busca os detalhes completos de um imóvel",
+      params: z.object({
+        id: z.string(), // ✅ Removemos o .cuid() para permitir o externalId
+      }),
+      response: {
+        200: z.any(),
+        404: z.object({ error: z.string(), code: z.string() }),
+      },
+    },
+    handler: async (request, reply) => {
+      try {
+        const getProperty = new GetProperty();
+        // O seu useCase (GetProperty) precisa estar preparado para buscar por externalId também!
+        const property = await getProperty.execute({ id: request.params.id });
+
+        return reply.send(property);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          return reply
+            .status(404)
+            .send({ error: error.message, code: "NOT_FOUND" });
+        }
+        throw error;
+      }
+    },
+  });
+
+  // 2. ROTA RECONSTRUÍDA: Cliente ver TODAS as propriedades
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "GET",
     url: "/",
     schema: {
       tags: ["Imóveis"],
-      description:
-        "Lista o catálogo de imóveis resumido para exibição nos cards",
+      summary: "Lista todos os imóveis cadastrados",
       response: {
-        201: z.object({
-          imoveis: z.array(
-            z.object({
-              id: z.string(),
-              title: z.string(),
-              propertyType: z.string(),
-              neighborhood: z.string().nullable(),
-              price: z.number(),
-            }),
-          ),
-        }),
-        400: errorResponseSchema,
+        200: z.any(), // Depois você pode tipar isso melhor com Zod
       },
     },
     handler: async (request, reply) => {
-      const propriedades = await prisma.property.findMany({
-        where: {
-          status: "DISPONIVEL",
-        },
-        select: {
-          id: true,
-          title: true,
-          propertyType: true,
-          neighborhood: true,
-          price: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+      // ⚠️ ATENÇÃO: Você precisa buscar as 'propriedades' no banco de dados aqui.
+      // Exemplo usando Prisma diretamente (ou você pode criar um UseCase de Listagem):
+      const propriedades = await prisma.property.findMany();
 
-      const imoveisFormatados = propriedades.map((imovel) => ({
+      const imoveisFormatados = propriedades.map((imovel: any) => ({
         id: imovel.id,
         title: imovel.title,
         propertyType: imovel.propertyType,
         neighborhood: imovel.neighborhood,
         price: Number(imovel.price),
+        bedrooms: imovel.bedrooms,
+        bathrooms: imovel.bathrooms,
+        mainImage: imovel.mainImage,
       }));
 
-      return reply.send({ imoveis: imoveisFormatados });
+      return reply.status(200).send({ imoveis: imoveisFormatados });
     },
   });
 
-  //adm criar novos anuncios
+  // 3. Admin criar novos anúncios
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
     url: "/",
@@ -128,35 +140,6 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
     },
   });
 
-  app.withTypeProvider<ZodTypeProvider>().route({
-    method: "GET",
-    url: "/imoveis/:id",
-    schema: {
-      tags: ["Imóveis"],
-      summary: "Busca os detalhes completos de um imóvel",
-      params: z.object({
-        id: z.string().cuid(),
-      }),
-      response: {
-        // Aqui você pode tipar a resposta completa do imóvel
-        200: z.any(),
-        404: z.object({ error: z.string(), code: z.string() }),
-      },
-    },
-    handler: async (request, reply) => {
-      try {
-        const getProperty = new GetProperty();
-        const property = await getProperty.execute({ id: request.params.id });
-
-        return reply.send(property);
-      } catch (error) {
-        if (error instanceof NotFoundError) {
-          return reply
-            .status(404)
-            .send({ error: error.message, code: "NOT_FOUND" });
-        }
-        throw error;
-      }
-    },
-  });
+  // ⚠️ NOTA: Removi a duplicata final do "GET /imoveis/:id" que estava sobrando no seu código original,
+  // pois a primeira rota do arquivo já faz exatamente a mesma coisa.
 };

@@ -1,10 +1,9 @@
 import { groq } from "@ai-sdk/groq";
-import { streamText, tool } from "ai";
+import { convertToModelMessages, streamText, tool, type UIMessage } from "ai";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 
-// Importamos os enums diretamente do que o Prisma gerou para você
-import { PropertyType, TransactionType } from "../generated/prisma/index.js";
+import { TransactionType } from "../generated/prisma/index.js";
 import { prisma } from "../lib/db.js";
 
 export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -15,100 +14,147 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
       tags: ["AI"],
       summary: "Chatbot de atendimento imobiliário",
       body: z.object({
-        messages: z.array(
-          z.object({
-            role: z.enum(["user", "assistant", "system", "data", "tool"]),
-            content: z.string(),
-          }),
-        ),
+        messages: z.array(z.any()),
       }),
     },
     handler: async (request, reply) => {
-      const { messages } = request.body;
+      const { messages } = request.body as { messages: UIMessage[] };
+
+      const modelMessages = await convertToModelMessages(messages);
 
       const result = streamText({
         model: groq("openai/gpt-oss-120b"),
         maxSteps: 5,
-        system: `Você é a assistente da imobiliária Casa São José. 
-        Sua função é buscar imóveis baseando-se estritamente no que o usuário pedir.
-        
-        REGRAS:
-        1. Se o usuário mencionar um local, tipo ou preço, use a ferramenta 'buscarImoveis'.
-        2. Não invente dados. Se a ferramenta não retornar nada, diga que não encontrou.
-        3. Identifique se o interesse é VENDA ou ALUGUEL.`,
+        system: `
+Você é a assistente da imobiliária Casa São José.
 
-        messages,
+Sua função é buscar imóveis com base exatamente no que o usuário pedir.
+
+Ao usar a ferramenta buscarImoveis, use somente estes campos:
+- tipo_transacao: "ALUGUEL" ou "VENDA"
+- tipoImovel: ex. "apartamento", "casa", "lote"
+- bairro
+- cidade
+- localizacao
+- precoMaximo
+- termoBusca
+
+Regras:
+1. "alugar", "locação", "aluguel" => tipo_transacao = "ALUGUEL"
+2. "comprar", "venda" => tipo_transacao = "VENDA"
+3. bairro deve ir em "bairro"
+4. cidade deve ir em "cidade"
+5. preço máximo deve ir em "precoMaximo"
+6. tipo de imóvel deve ir em "tipoImovel"
+7. Não invente campos fora dessa lista.
+8. Se não encontrar resultados, diga que não encontrou imóveis com esses filtros.
+`,
+        messages: modelMessages,
         tools: {
           buscarImoveis: tool({
             description:
-              "Busca imóveis no banco de dados usando os termos digitados pelo usuário.",
-            // ✅ MAPEAMENTO COMPLETO: Declaramos todos os campos que deram erro anteriormente
-            parameters: z.object({
-              termoBusca: z
-                .string()
-                .optional()
-                .describe("Termo geral (ex: casa, apartamento)"),
-              tipo: z.string().optional().describe("O tipo do imóvel"),
-              localizacao: z.string().optional().describe("Cidade ou bairro"),
-              cidade: z.string().optional(),
+              "Busca imóveis no banco de dados usando filtros estruturados.",
+            inputSchema: z.object({
+              termoBusca: z.string().optional(),
+              tipoImovel: z.string().optional(),
               bairro: z.string().optional(),
-              preco: z.number().optional(),
-              precoMaximo: z.number().optional(),
-              tipo_transacao: z.string().optional(),
+              cidade: z.string().optional(),
+              localizacao: z.string().optional(),
+              precoMaximo: z.coerce.number().optional(),
+              tipo_transacao: z.enum(["VENDA", "ALUGUEL"]).optional(),
             }),
-
             execute: async (args) => {
-              // 1. Normalização dos filtros (unificamos o que a IA mandar)
-              const pesquisaGeral = args.termoBusca || args.tipo || "";
-              const localFiltro =
-                args.localizacao || args.cidade || args.bairro || "";
-              const valorFiltro = args.precoMaximo || args.preco;
+              const buscaTexto = (
+                args.termoBusca ||
+                args.tipoImovel ||
+                ""
+              ).trim();
+              const bairroFiltro = args.bairro?.trim();
+              const cidadeFiltro = args.cidade?.trim();
+              const localFiltro = args.localizacao?.trim();
+              const valorFiltro = args.precoMaximo;
 
-              // 2. Mapeamento de Enums do seu Schema
-              let transacaoFiltro = undefined;
-              if (args.tipo_transacao?.toUpperCase().includes("VENDA"))
+              let transacaoFiltro: TransactionType | undefined;
+
+              if (args.tipo_transacao === "VENDA") {
                 transacaoFiltro = TransactionType.VENDA;
-              if (args.tipo_transacao?.toUpperCase().includes("ALU"))
+              } else if (args.tipo_transacao === "ALUGUEL") {
                 transacaoFiltro = TransactionType.ALUGUEL;
+              }
 
-              // 3. Busca no Prisma usando os campos do seu schema.prisma
+              const where: any = {
+                status: "DISPONIVEL",
+              };
+
+              if (transacaoFiltro) {
+                where.transactionType = transacaoFiltro;
+              }
+
+              if (
+                typeof valorFiltro === "number" &&
+                !Number.isNaN(valorFiltro)
+              ) {
+                where.price = { lte: valorFiltro };
+              }
+
+              if (bairroFiltro) {
+                where.neighborhood = {
+                  contains: bairroFiltro,
+                  mode: "insensitive",
+                };
+              }
+
+              if (cidadeFiltro) {
+                where.city = {
+                  contains: cidadeFiltro,
+                  mode: "insensitive",
+                };
+              }
+
+              if (!bairroFiltro && !cidadeFiltro && localFiltro) {
+                where.OR = [
+                  {
+                    city: {
+                      contains: localFiltro,
+                      mode: "insensitive",
+                    },
+                  },
+                  {
+                    neighborhood: {
+                      contains: localFiltro,
+                      mode: "insensitive",
+                    },
+                  },
+                ];
+              }
+
+              if (buscaTexto) {
+                where.AND = [
+                  {
+                    OR: [
+                      {
+                        title: {
+                          contains: buscaTexto,
+                          mode: "insensitive",
+                        },
+                      },
+                      {
+                        description: {
+                          contains: buscaTexto,
+                          mode: "insensitive",
+                        },
+                      },
+                    ],
+                  },
+                ];
+              }
+
+              console.log("ARGS TOOL:", args);
+              console.log("WHERE PRISMA:", JSON.stringify(where, null, 2));
+
               const properties = await prisma.property.findMany({
-                where: {
-                  status: "DISPONIVEL",
-                  transactionType: transacaoFiltro,
-                  price: valorFiltro ? { lte: valorFiltro } : undefined,
-                  // ✅ BUSCA FLEXÍVEL: O que o user digitou é buscado em vários campos
-                  OR:
-                    pesquisaGeral || localFiltro
-                      ? [
-                          {
-                            title: {
-                              contains: pesquisaGeral,
-                              mode: "insensitive",
-                            },
-                          },
-                          {
-                            city: {
-                              contains: localFiltro,
-                              mode: "insensitive",
-                            },
-                          },
-                          {
-                            neighborhood: {
-                              contains: localFiltro,
-                              mode: "insensitive",
-                            },
-                          },
-                          {
-                            description: {
-                              contains: pesquisaGeral,
-                              mode: "insensitive",
-                            },
-                          },
-                        ]
-                      : undefined,
-                },
-                take: 4,
+                where,
+                take: 5,
                 select: {
                   id: true,
                   title: true,
@@ -125,11 +171,11 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
         },
       });
 
-      // Padrão de resposta do repositório bootcamp-treinos
       const response = result.toUIMessageStreamResponse();
 
-      reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
+      response.headers.forEach((value, key) => {
+        reply.header(key, value);
+      });
 
       return reply.send(response.body);
     },

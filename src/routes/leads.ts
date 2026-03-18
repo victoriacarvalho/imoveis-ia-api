@@ -1,4 +1,5 @@
 import { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import z from "zod";
 
 import { createLeadBodySchema, errorResponseSchema } from "../schemas/index.js";
 import { CreateLead } from "../usecases/create-lead.js";
