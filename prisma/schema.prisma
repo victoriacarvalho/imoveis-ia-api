@@ -49,20 +49,29 @@ enum LeadStatus {
 // MODELS (Tabelas do Banco de Dados)
 // -----------------------------------------------------------------------------
 
-// Tabela de Usuários baseada exatamente na sua imagem
+
 
 model User {
-  id            String     @id
-  name          String?
-  email         String     @unique
-  emailVerified Boolean    @default(false)
-  image         String?
-  isAdmin       Boolean    @default(false)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  favorites     Favorite[] // Um usuário pode ter vários imóveis favoritos
-  sessions      Session[]
-  accounts      Account[]
+  id             String     @id
+  name           String?
+  email          String     @unique
+  emailVerified  Boolean    @default(false)
+  image          String?
+  isAdmin        Boolean    @default(false)
+
+  plan           String?    @default("Plano Básico")
+  bedrooms       Int?
+  parkingSpots   Int?
+  bathrooms      Int?
+  neighborhood   String?
+  onboardingDone Boolean    @default(false)
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  favorites      Favorite[]
+  sessions       Session[]
+  accounts       Account[]
 
   @@map("user")
 }

@@ -1,7 +1,6 @@
 import "dotenv/config";
 
 import fastifyCors from "@fastify/cors";
-import cors from "@fastify/cors";
 import fastifySwagger from "@fastify/swagger";
 import fastifyApiReference from "@scalar/fastify-api-reference";
 import Fastify from "fastify";
@@ -17,6 +16,8 @@ import { auth } from "./lib/auth.js";
 import { aiRoutes } from "./routes/ai.js";
 import { imoveisRoutes } from "./routes/imoveis.js";
 import { leadsRoutes } from "./routes/leads.js";
+import { profileRoutes } from "./routes/profile.js";
+
 const app = Fastify({
   logger: true,
 });
@@ -77,6 +78,7 @@ await app.register(fastifyApiReference, {
 await app.register(imoveisRoutes, { prefix: "/imoveis" });
 await app.register(aiRoutes);
 await app.register(leadsRoutes, { prefix: "/leads" });
+await app.register(profileRoutes);
 
 app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
