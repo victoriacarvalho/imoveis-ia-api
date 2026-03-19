@@ -26,6 +26,21 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
         return "João Monlevade";
       }
 
+      function extrairUserId(messages: UIMessage[]) {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const message = messages[i] as any;
+          const metadata = message?.metadata;
+
+          if (metadata?.userId) {
+            return metadata.userId as string;
+          }
+        }
+
+        return undefined;
+      }
+
+      const userId = extrairUserId(messages);
+
       const result = streamText({
         model: groq("openai/gpt-oss-120b"),
         maxSteps: 5,
@@ -52,7 +67,12 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
           8. tipo de imóvel deve ir em "tipoImovel"
           9. Não invente campos fora dessa lista
           10. Se não encontrar resultados, diga que não encontrou imóveis com esses filtros
-          `,
+          11. Quando o usuário expressar uma mudança de preferência pessoal relacionada à busca de imóveis, como quantidade de quartos, banheiros, vagas, bairro, tipo de transação, tipo de imóvel ou orçamento, use a ferramenta atualizarPerfilPreferencias para salvar essas informações no perfil antes de responder.
+          12. Sempre que usar a ferramenta buscarImoveis, retorne os resultados para o usuário e sugira que ele clique para ver os detalhes de cada imóvel ou para ver todos os resultados da busca.
+          13. Seja breve e objetivo nas respostas, focando em ajudar o usuário a encontrar o imóvel ideal.
+          14. Quando usar atualizarPerfilPreferencias, confirme a alteração de forma natural e breve.
+          15.Só use a ferramenta atualizarPerfilPreferencias quando o usuário tiver informado claramente o novo valor da preferência. Nunca use a ferramenta para perguntas da própria assistente, como "qual o novo bairro?".
+        `,
         messages: modelMessages,
         tools: {
           buscarImoveis: tool({
@@ -137,8 +157,11 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
                 ];
               }
 
-              console.log("ARGS TOOL:", args);
-              console.log("WHERE PRISMA:", JSON.stringify(where, null, 2));
+              console.log("ARGS TOOL buscarImoveis:", args);
+              console.log(
+                "WHERE PRISMA buscarImoveis:",
+                JSON.stringify(where, null, 2),
+              );
 
               const properties = await prisma.property.findMany({
                 where,
@@ -154,6 +177,55 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
               });
 
               return properties;
+            },
+          }),
+
+          atualizarPerfilPreferencias: tool({
+            description:
+              "Atualiza as preferências do perfil do usuário quando ele pedir mudanças como quartos, banheiros, vagas, bairro, tipo de transação, tipo de imóvel ou orçamento.",
+            inputSchema: z.object({
+              plan: z.string().optional(),
+              bedrooms: z.number().optional(),
+              parkingSpots: z.number().optional(),
+              bathrooms: z.number().optional(),
+              neighborhood: z.string().optional(),
+              transactionType: z.string().optional(),
+              propertyType: z.string().optional(),
+              maxPrice: z.number().optional(),
+            }),
+            execute: async (input) => {
+              if (!userId) {
+                throw new Error(
+                  "Usuário não identificado para atualizar preferências",
+                );
+              }
+
+              console.log("ARGS TOOL atualizarPerfilPreferencias:", {
+                userId,
+                ...input,
+              });
+
+              const response = await fetch(
+                "http://localhost:8081/profile/preferences",
+                {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    userId,
+                    ...input,
+                  }),
+                },
+              );
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Erro profile/preferences:", errorText);
+                throw new Error("Erro ao atualizar preferências");
+              }
+
+              return await response.json();
             },
           }),
         },

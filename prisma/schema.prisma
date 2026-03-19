@@ -1,5 +1,4 @@
 
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -8,10 +7,6 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-// -----------------------------------------------------------------------------
-// ENUMS (Listas de opções fixas para padronizar o banco)
-// -----------------------------------------------------------------------------
 
 enum TransactionType {
   VENDA
@@ -45,12 +40,6 @@ enum LeadStatus {
   VISITA_FEITA
 }
 
-// -----------------------------------------------------------------------------
-// MODELS (Tabelas do Banco de Dados)
-// -----------------------------------------------------------------------------
-
-
-
 model User {
   id             String     @id
   name           String?
@@ -76,14 +65,13 @@ model User {
   @@map("user")
 }
 
-// Tabela das Imobiliárias (Ou sites fontes do Scraping)
 
 model Agency {
   id           String  @id @default(cuid())
   name         String
   websiteUrl   String?
   logoUrl      String?
-  primaryColor String? @default("#10B981") // Cor padrão caso seja White-Label
+  primaryColor String? @default("#10B981") 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -94,11 +82,10 @@ model Agency {
   @@map("agencies")
 }
 
-// Tabela Principal: Imóveis
 
 model Property {
   id              String          @id @default(cuid())
-  externalId      String? // ID do imóvel no site original (Evita duplicar no Scraping)
+  externalId      String? 
   title           String
   description     String?         @db.Text
   transactionType TransactionType
@@ -116,25 +103,62 @@ model Property {
   parkingSpots    Int             @default(0)
   area            Decimal?        @db.Decimal(10, 2)
   mainImage       String
-  gallery         String[] // Array nativo do PostgreSQL para as outras fotos
+  gallery         String[] 
+  interests Interest[]
+  leadEvents LeadEvent[]
   status          PropertyStatus  @default(DISPONIVEL)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Chaves Estrangeiras (Relações)
   agencyId String
   agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   favorites Favorite[]
   leads     Lead[]
 
-  // Garante que o robô não cadastre o mesmo imóvel da mesma imobiliária 2 vezes
+
   @@unique([agencyId, externalId])
   @@map("properties")
 }
 
-// Tabela de "Lista de Desejos" (Ligação N:N entre User e Property)
+model Interest {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([propertyId])
+  @@map("interests")
+}
+
+
+enum LeadEventType {
+  interest_click
+  whatsapp_click
+}
+
+model LeadEvent {
+  id         String        @id @default(cuid())
+  userId     String
+  userName   String?
+  userEmail  String?
+  propertyId String
+  eventType  LeadEventType
+  createdAt  DateTime      @default(now())
+
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([propertyId])
+  @@index([eventType])
+  @@index([propertyId, eventType])
+  @@map("lead_events")
+}
+
 
 model Favorite {
   id        String   @id @default(cuid())
@@ -146,12 +170,23 @@ model Favorite {
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  // Garante que o usuário não favorite o mesmo imóvel 2 vezes
   @@unique([userId, propertyId])
   @@map("favorites")
 }
 
-// Tabela de Contatos/Agendamentos (Onde o dinheiro acontece)
+model Profile {
+  id              String   @id
+  name            String?
+  plan            String?
+  bedrooms        Int?
+  parkingSpots    Int?
+  bathrooms       Int?
+  neighborhood    String?
+  transactionType String?
+  propertyType    String?
+  maxPrice        Float?
+  onboardingDone  Boolean  @default(false)
+}
 
 model Lead {
   id          String     @id @default(cuid())

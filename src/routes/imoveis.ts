@@ -42,6 +42,7 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
             .status(404)
             .send({ error: error.message, code: "NOT_FOUND" });
         }
+
         throw error;
       }
     },
@@ -52,8 +53,9 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
     url: "/",
     schema: {
       tags: ["Imóveis"],
-      summary: "Lista todos os imóveis cadastrados",
+      summary: "Lista imóveis cadastrados com filtros opcionais",
       querystring: z.object({
+        ids: z.string().optional(),
         propertyType: z.string().optional(),
         transactionType: z.string().optional(),
         take: z.string().optional(),
@@ -63,26 +65,55 @@ export const imoveisRoutes = async (app: FastifyInstance) => {
       },
     },
     handler: async (request, reply) => {
-      const { propertyType, transactionType, take } = request.query as any;
+      const { ids, propertyType, transactionType, take } = request.query as {
+        ids?: string;
+        propertyType?: string;
+        transactionType?: string;
+        take?: string;
+      };
+
+      console.log("QUERY /imoveis:", request.query);
+
+      const where: Record<string, unknown> = {};
+
+      if (ids) {
+        const idsArray = ids.split(",").filter(Boolean);
+
+        where.id = {
+          in: idsArray,
+        };
+
+        console.log("FILTRANDO IDS:", idsArray);
+      }
+
+      if (propertyType) {
+        where.propertyType = propertyType;
+      }
+
+      if (transactionType) {
+        where.transactionType = transactionType;
+      }
 
       const propriedades = await prisma.property.findMany({
-        where: {
-          ...(propertyType ? { propertyType: propertyType } : {}),
-          ...(transactionType ? { transactionType: transactionType } : {}),
-        },
+        where,
         take: take ? parseInt(take) : undefined,
       });
+
+      console.log("TOTAL RETORNADO:", propriedades.length);
 
       const imoveisFormatados = propriedades.map((imovel: any) => ({
         id: imovel.id,
         title: imovel.title,
         propertyType: imovel.propertyType,
         neighborhood: imovel.neighborhood,
+        city: imovel.city,
         price: Number(imovel.price),
         bedrooms: imovel.bedrooms,
         bathrooms: imovel.bathrooms,
         mainImage: imovel.mainImage,
         description: imovel.description,
+        transactionType: imovel.transactionType,
+        status: imovel.status,
       }));
 
       return reply.status(200).send({ imoveis: imoveisFormatados });

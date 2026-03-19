@@ -13,11 +13,15 @@ import {
 import z from "zod";
 
 import { auth } from "./lib/auth.js";
+import { adminRoutes } from "./routes/admin.js";
+import { adminPropertiesRoutes } from "./routes/admin-properties.js";
 import { aiRoutes } from "./routes/ai.js";
 import { favoriteRoutes } from "./routes/favorites.js";
 import { imoveisRoutes } from "./routes/imoveis.js";
-import { leadsRoutes } from "./routes/leads.js";
+import { interestsRoutes } from "./routes/interests.js";
+import { leadEventsRoutes } from "./routes/leads.js";
 import { profileRoutes } from "./routes/profile.js";
+import { profilePreferencesRoutes } from "./routes/profile-preferences.js";
 
 const app = Fastify({
   logger: true,
@@ -54,7 +58,7 @@ await app.register(fastifyCors, {
     "x-vercel-ai-request-id",
   ],
   exposedHeaders: ["x-vercel-ai-data-stream"],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
 });
 
 await app.register(fastifyApiReference, {
@@ -78,9 +82,13 @@ await app.register(fastifyApiReference, {
 //Rotas
 await app.register(imoveisRoutes, { prefix: "/imoveis" });
 await app.register(aiRoutes);
-await app.register(leadsRoutes, { prefix: "/leads" });
+await app.register(leadEventsRoutes);
 await app.register(profileRoutes);
 await app.register(favoriteRoutes);
+await app.register(interestsRoutes);
+await app.register(adminRoutes);
+await app.register(adminPropertiesRoutes);
+await app.register(profilePreferencesRoutes);
 
 app.withTypeProvider<ZodTypeProvider>().route({
   method: "GET",
