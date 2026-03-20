@@ -49,6 +49,18 @@ export const favoriteRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const { userId, propertyId } = request.body;
 
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        return reply.status(404).send({
+          message:
+            "Usuário não encontrado. Sincronize o usuário antes de favoritar.",
+        });
+      }
+
       const existing = await prisma.favorite.findUnique({
         where: {
           userId_propertyId: {
@@ -60,9 +72,7 @@ export const favoriteRoutes: FastifyPluginAsyncZod = async (app) => {
 
       if (existing) {
         await prisma.favorite.delete({
-          where: {
-            id: existing.id,
-          },
+          where: { id: existing.id },
         });
 
         return reply.send({ isFavorite: false });
