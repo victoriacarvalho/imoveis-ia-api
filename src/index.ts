@@ -120,11 +120,6 @@ app.withTypeProvider<ZodTypeProvider>().route({
   },
 });
 
-app.listen({
-  port: 8081,
-  host: "0.0.0.0", // OBRIGATÓRIO para Docker
-});
-
 app.route({
   method: ["GET", "POST"],
   url: "/api/auth/*",
