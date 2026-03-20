@@ -40,7 +40,7 @@ await app.register(fastifySwagger, {
     servers: [
       {
         description: "Localhost",
-        url: "http://localhost:3000",
+        url: "https://imoveis-ia-api.onrender.com",
       },
     ],
   },
@@ -155,10 +155,11 @@ app.route({
 });
 
 const PORT = Number(process.env.PORT) || 8081;
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  console.log(`Server ready at http://localhost:${PORT}`);
+  console.log(`Server ready at ${API_URL}:${PORT}`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

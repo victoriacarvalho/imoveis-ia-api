@@ -6,6 +6,8 @@ import { z } from "zod";
 import { TransactionType } from "../generated/prisma/index.js";
 import { prisma } from "../lib/db.js";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
   app.route({
     method: "POST",
@@ -205,19 +207,16 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
                 ...input,
               });
 
-              const response = await fetch(
-                "http://localhost:8081/profile/preferences",
-                {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    userId,
-                    ...input,
-                  }),
+              const response = await fetch(`${API_URL}/profile/preferences`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
                 },
-              );
+                body: JSON.stringify({
+                  userId,
+                  ...input,
+                }),
+              });
 
               if (!response.ok) {
                 const errorText = await response.text();

@@ -9,8 +9,10 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export const auth = betterAuth({
-  trustedOrigins: ["http://localhost:3000"],
+  trustedOrigins: [`${API_URL}`],
   emailAndPassword: {
     enabled: true,
   },
