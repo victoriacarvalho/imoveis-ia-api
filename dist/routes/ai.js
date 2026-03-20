@@ -1,7 +1,7 @@
 import { groq } from "@ai-sdk/groq";
+import { TransactionType } from "@prisma/client";
 import { convertToModelMessages, streamText, tool } from "ai";
 import { z } from "zod";
-import { TransactionType } from "../generated/prisma/index.js";
 import { prisma } from "../lib/db.js";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 export const aiRoutes = async (app) => {

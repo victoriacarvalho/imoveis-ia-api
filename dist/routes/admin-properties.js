@@ -78,7 +78,6 @@ export async function adminPropertiesRoutes(app) {
                 errors: parsed.error.flatten(),
             });
         }
-        // AQUI: Deixamos a desestruturação normal
         const { userId, title, description, neighborhood, city, state, agencyId, propertyType, transactionType, price, bedrooms, bathrooms, parkingSpots, mainImage, gallery, status, } = parsed.data;
         const isAdmin = await ensureAdmin(userId);
         if (!isAdmin) {
@@ -93,7 +92,6 @@ export async function adminPropertiesRoutes(app) {
                 neighborhood,
                 city,
                 state,
-                // AQUI: É aqui que o casting "as PropertyType" e "as TransactionType" devem ficar
                 propertyType: propertyType,
                 transactionType: transactionType,
                 price,
@@ -123,7 +121,6 @@ export async function adminPropertiesRoutes(app) {
                 message: "Dados inválidos",
             });
         }
-        // AQUI: Deixamos a desestruturação normal
         const { id } = parsedParams.data;
         const { userId, title, description, neighborhood, city, state, agencyId, propertyType, transactionType, price, bedrooms, bathrooms, parkingSpots, mainImage, gallery, status, } = parsedBody.data;
         const isAdmin = await ensureAdmin(userId);

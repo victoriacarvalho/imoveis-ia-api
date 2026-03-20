@@ -1,4 +1,5 @@
-import { LeadOrigin } from "../generated/prisma/index.js";
+import { LeadOrigin } from "@prisma/client";
+
 import { prisma } from "../lib/db.js";
 
 type CreateLeadInput = {

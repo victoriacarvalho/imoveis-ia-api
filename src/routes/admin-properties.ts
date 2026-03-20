@@ -1,7 +1,7 @@
+import { PropertyType, TransactionType } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-import { PropertyType, TransactionType } from "../generated/prisma/index.js";
 import { prisma } from "../lib/db.js";
 
 const propertyBodySchema = z.object({
@@ -105,7 +105,6 @@ export async function adminPropertiesRoutes(app: FastifyInstance) {
       });
     }
 
-    // AQUI: Deixamos a desestruturação normal
     const {
       userId,
       title,
@@ -140,7 +139,6 @@ export async function adminPropertiesRoutes(app: FastifyInstance) {
         neighborhood,
         city,
         state,
-        // AQUI: É aqui que o casting "as PropertyType" e "as TransactionType" devem ficar
         propertyType: propertyType as PropertyType,
         transactionType: transactionType as TransactionType,
         price,
@@ -175,7 +173,6 @@ export async function adminPropertiesRoutes(app: FastifyInstance) {
       });
     }
 
-    // AQUI: Deixamos a desestruturação normal
     const { id } = parsedParams.data;
     const {
       userId,
