@@ -21,9 +21,9 @@ async function runScraper() {
   });
 
   const browser = await puppeteer.launch({
-    executablePath:
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    headless: false,
+    // 1. APAGUE a linha do executablePath (C:\\Program Files...)
+    headless: true, // 2. OBRIGATÓRIO ser true no Render
+    args: ["--no-sandbox", "--disable-setuid-sandbox"], // 3. OBRIGATÓRIO para o Chrome não travar em servidores Linux
     defaultViewport: null,
   });
 
