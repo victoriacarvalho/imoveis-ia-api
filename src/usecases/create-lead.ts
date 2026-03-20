@@ -1,9 +1,16 @@
+import { LeadOrigin } from "../generated/prisma/index.js";
 import { prisma } from "../lib/db.js";
-import { CreateLeadInput } from "../schemas/index.js"; // Usando o seu schema centralizado
+
+type CreateLeadInput = {
+  clientName: string;
+  clientPhone: string;
+  origin: LeadOrigin;
+  aiSummary?: string | null;
+  propertyId: string;
+};
 
 export class CreateLead {
   async execute(data: CreateLeadInput) {
-    // Busca a agência dona do imóvel para vincular o lead corretamente
     const property = await prisma.property.findUnique({
       where: { id: data.propertyId },
       select: { agencyId: true },

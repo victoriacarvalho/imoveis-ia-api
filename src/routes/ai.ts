@@ -45,7 +45,6 @@ export const aiRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const result = streamText({
         model: groq("openai/gpt-oss-120b"),
-        maxSteps: 5,
         system: `
           Você é a assistente da imobiliária Casa São José.
 
