@@ -13,6 +13,7 @@ import { favoriteRoutes } from "./routes/favorites.js";
 import { imoveisRoutes } from "./routes/imoveis.js";
 import { interestsRoutes } from "./routes/interests.js";
 import { leadEventsRoutes } from "./routes/leads.js";
+import { meRoutes } from "./routes/me.js";
 import { profileRoutes } from "./routes/profile.js";
 import { profilePreferencesRoutes } from "./routes/profile-preferences.js";
 const app = Fastify({
@@ -76,6 +77,7 @@ await app.register(interestsRoutes);
 await app.register(adminRoutes);
 await app.register(adminPropertiesRoutes);
 await app.register(profilePreferencesRoutes);
+await app.register(meRoutes);
 app.withTypeProvider().route({
     method: "GET",
     url: "/swagger.json",
