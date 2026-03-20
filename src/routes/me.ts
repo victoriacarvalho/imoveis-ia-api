@@ -6,17 +6,17 @@ import { prisma } from "../lib/db.js";
 export async function meRoutes(app: FastifyInstance) {
   app.get("/me", async (request, reply) => {
     const querySchema = z.object({
-      clerkId: z.string().min(1),
+      email: z.string().email(),
     });
 
     const parsed = querySchema.safeParse(request.query);
 
     if (!parsed.success) {
-      return reply.status(400).send({ message: "clerkId é obrigatório" });
+      return reply.status(400).send({ message: "email é obrigatório" });
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: parsed.data.clerkId },
+      where: { email: parsed.data.email },
       select: {
         id: true,
         name: true,
